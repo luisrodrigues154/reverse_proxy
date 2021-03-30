@@ -90,30 +90,38 @@ class Worker(BaseHTTPRequestHandler):
                 uri = "https://" + host
 
             uri += self.path
-            (cliAddr, cliPort) = self.client_address
-            printIt("CONN ({})".format(httpMethod), "Connection from {}:{} to {}".format(cliAddr, cliPort, host))
             
-            self.modifyHeader(self.headers, "Host", host)
+            printIt("CONN ({})".format(httpMethod), "Connection from {} to {}".format(self.client_address, host))
+            
             
             isCached = CACHE.isCached(uri)
 
             if(not isCached):
                 printIt("CACHE", "Cache miss, will relay to server")
-                isCached = self.relayRequest(uri, httpMethod, requestMethodHandler, data)
+                isCached = self.relayRequest(uri, httpMethod, requestMethodHandler,  data)
                 CACHE.cacheData(uri, isCached)
 
-            self.relayResponse(cliAddr, cliPort, isCached)
+            self.relayResponse(isCached)
 
         except Exception as err:
-            printIt("ERROR", "Agnostic processor error: " + str(err))
+            printIt("ERROR", "Agnostic processor error: {}".format(str(err)))
         
 
-    def relayResponse(self, cliAddr, cliPort, response):
+    def relayResponse(self,  response):
         global NOT_USE_HEADERS
-        printIt("RESPONSE", "Relaying to client {}:{}".format(cliAddr, cliPort))
+        printIt("RESPONSE", "Relaying to client {}".format(self.client_address))
         
+        print("RESPONSE")
+        print(response.headers)
+        # remove added headers
+        response.headers = self.delHeader(response.headers, "Forwarded")
+
+        # set connection closed
+        response.headers = self.modifyHeader(response.headers, "Connection", "close")
+
         # modify server header
         response.headers = self.modifyHeader(response.headers, "Server", "localhost:1414")
+
         # send status code
         self.send_response(response.status_code)
         
@@ -128,6 +136,10 @@ class Worker(BaseHTTPRequestHandler):
 
     def relayRequest(self, uri, httpMethod, requestMethodHandler, data=False):
         try:
+            # add header
+            fwdHeader = 'for={}:{}'.format(self.client_address[0],self.client_address[1])
+            self.headers = self.addHeader(self.headers, "Forwarded", fwdHeader)
+            # relay
             printIt("REQUEST", "Relaying ({}) to {}".format(httpMethod, uri))
             if(data):
                 response = requestMethodHandler(uri, data=data, headers=self.headers, verify=True)
@@ -137,7 +149,19 @@ class Worker(BaseHTTPRequestHandler):
         except RequestException as err:
             printIt("ERROR", "Error while relaying request: " + str(err))
         return None
-    
+
+    def delHeader(self, headers, key):
+        try:
+            del(headers[key])
+        except KeyError as err:
+            printIt("ERROR", "Trying to remove header {}: {}".format(key, str(err)))
+        return headers
+
+    def addHeader(self, headers, key, value):
+        
+        headers[key] = value
+        return headers
+
     def modifyHeader(self, headers, headerKey, newValue):
         try:
             old = headers[headerKey] 
