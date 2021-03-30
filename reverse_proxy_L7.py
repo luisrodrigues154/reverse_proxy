@@ -110,10 +110,6 @@ class Worker(BaseHTTPRequestHandler):
     def relayResponse(self,  response):
         global NOT_USE_HEADERS
         printIt("RESPONSE", "Relaying to client {}".format(self.client_address))
-        
-    
-        # remove added headers
-        response.headers = self.delHeader(response.headers, "Forwarded")
 
         # set connection closed
         response.headers = self.modifyHeader(response.headers, "Connection", "close")
