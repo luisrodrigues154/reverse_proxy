@@ -111,8 +111,7 @@ class Worker(BaseHTTPRequestHandler):
         global NOT_USE_HEADERS
         printIt("RESPONSE", "Relaying to client {}".format(self.client_address))
         
-        print("RESPONSE")
-        print(response.headers)
+    
         # remove added headers
         response.headers = self.delHeader(response.headers, "Forwarded")
 
